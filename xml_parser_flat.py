@@ -56,10 +56,22 @@ def parse(file_path):
                 if len(tag_stack)==2:
                     # We add the parent tag as another value in the record
                     # It needs to be recreated, otherwise all of its children will be readded as its value, duplicating data
-                    parent = etree.Element(elem.tag)
-                    parent.attrib = elem.attrib
-                    parent.text=""
-                    current_tag[elem.tag]=parent
+                                        #posible id field
+                    if guess_id:
+                        id_value = extract_id(elem)
+                        if id_value:
+                            id = etree.Element("_id")
+                            id.text=id_value
+                            current_tag['_id']=id
+
+                            #add item's parent as another field: parent.tagName_id###
+                            parent = etree.Element('p_id')
+                            #parent.attrib = elem.attrib
+                            parent.text=extract_id(elem)
+                            current_tag['p_id']=parent
+                        else:
+                            print("Asked to guess Ids but a record without id found")
+
                     teams.append(simple_xml2dict(current_tag))
                     current_tag={}
                     #break;
