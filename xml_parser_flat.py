@@ -4,6 +4,7 @@ import xml.etree.ElementTree as etree
 import pprint
 
 def extract_id(elem):
+    pass
     try:
         return elem.attrib['id']
     except:
@@ -44,7 +45,7 @@ def simple_xml2dict(elem):
     return item
 
 
-def parse(file_path, guess_id=True):
+def parse(file_path, id_field=None):
     '''
     must return a list of tuples, with each entry:
         (team_name:string, (team_words,):tuple, frequency:int, )
@@ -64,20 +65,11 @@ def parse(file_path, guess_id=True):
                     # We add the parent tag as another value in the record
                     # It needs to be recreated, otherwise all of its children will be readded as its value, duplicating data
                                         #posible id field
-                    if guess_id:
-                        id_value = extract_id(elem)
-                        if id_value:
-                            id = etree.Element("_id")
-                            id.text=id_value
-                            current_tag['_id']=id
-
-                            #add item's parent as another field: parent.tagName_id###
-                            parent = etree.Element('p_id')
-                            #parent.attrib = elem.attrib
-                            parent.text=extract_id(elem)
-                            current_tag['p_id']=parent
-                        else:
-                            print("Asked to guess Ids but a record without id found")
+                    if id_field:
+                        id = etree.Element("_id")
+                        id.text=elem.attrib[id_field]
+                        print(id.text)
+                        current_tag['_id']=id
 
                     teams.append(simple_xml2dict(current_tag))
                     current_tag={}

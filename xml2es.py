@@ -11,13 +11,13 @@ from elasticsearch.helpers import bulk, streaming_bulk, parallel_bulk
 def validate_item(item):
     return item
 
-def parseXML(xml_file, parser=None):
+def parseXML(xml_file, parser=None, id_field=None):
     '''
     parser name of the file that contains a parser implementation
     '''
     if parser is not None:
         parser_module = import_module(parser)
-        return parser_module.parse(xml_file)
+        return parser_module.parse(xml_file, id_field=id_field)
     else:
         pass
 
@@ -54,9 +54,11 @@ def push2es_stream(config):
     _index = config.get('main', 'index')
     _type = config.get('main', 'type')
     parser = config.get('xml', 'parser')
+    id_field = config.get('main', 'id_field', fallback=None)
+
     data=[]
     #with open(source_path) as source_file:
-    data = parseXML(source_path, parser=parser)
+    data = parseXML(source_path, parser=parser, id_field=id_field)
     #Stream Bulk
     bulk_data = [{'_op_type': 'index','_index': _index,'_type': _type,'_source': validate_item(i)} for i in data]
     bulk(client=es, actions=bulk_data)
@@ -67,20 +69,23 @@ def push2es_parallel(config):
     _index = config.get('main', 'index')
     _type = config.get('main', 'type')
     parser = config.get('xml', 'parser')
+    id_field = config.get('main', 'id_field', fallback=None)
     #assumes data is a list of dictionaries
     def genereate_actions(data):
         for item in data:
-            source_dict=item
-            yield {
+            action = {
                 '_op_type': 'index',
                 '_index': _index,
                 '_type': _type,
-                '_source': source_dict
+                '_source': item
             }
+            if '_id' in item:
+                action['_id'] = item['_id']
+                del item['_id']
+            yield action
     
     data=[]
-#    with open(source_path) as source_file:
-    data = parseXML(source_path, parser=parser)
+    data = parseXML(source_path, parser=parser, id_field=id_field)
 
     #paralell bulk
     for success, info in parallel_bulk(es, genereate_actions(data), thread_count=4):
@@ -96,5 +101,5 @@ def xml2es(parallel=True):
         push2es_stream(config)
 
 if __name__ == '__main__':
-    xml2es(parallel=False)
-    #xml2es()
+    #xml2es(parallel=False)
+    xml2es()

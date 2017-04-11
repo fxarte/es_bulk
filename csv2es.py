@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import configparser
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk, streaming_bulk, parallel_bulk
-
+import pprint
 cached_values={}
 
 def preprocess_item(item, config):
@@ -43,6 +43,7 @@ def getcontent_csv(config):
     delimiter = str.encode(delimiter, 'utf-8')
     delimiter = delimiter.decode('unicode_escape')
     id_field = config.get('main', 'id_field', fallback=False)
+    #print(id_field)
     
 
     with open(source_path, encoding='utf-8') as f:
@@ -59,9 +60,10 @@ def getcontent_csv(config):
             if id_field:
                 id = item[id_field]
                 action['_id'] = id
-                item.pop('_id')
+                item.pop('_id', None)
 
             action['_source']=item
+            #pprint.pprint(action)
             yield action
 
 
