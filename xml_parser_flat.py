@@ -3,6 +3,13 @@
 import xml.etree.ElementTree as etree
 import pprint
 
+def extract_id(elem):
+    try:
+        return elem.attrib['id']
+    except:
+        #Build id from all attributes
+        return ';'.join([k +"="+v for k,v in elem.attrib.items()])
+
 def simple_xml2dict(elem):
     item = {}
     for key, value in elem.items():
@@ -37,7 +44,7 @@ def simple_xml2dict(elem):
     return item
 
 
-def parse(file_path):
+def parse(file_path, guess_id=True):
     '''
     must return a list of tuples, with each entry:
         (team_name:string, (team_words,):tuple, frequency:int, )
