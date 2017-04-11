@@ -8,8 +8,8 @@ from elasticsearch.helpers import bulk, streaming_bulk, parallel_bulk
 
 cached_values={}
 
-def validate_item(item):
-    return item
+def preprocess_item(item, config):
+    pass
 
 
 def recreate_index(config):
@@ -39,22 +39,37 @@ def getcontent_csv(config):
     #Parse field names if set
     fieldnames=fieldnames.split(',') if fieldnames is not None else None
     # Added support multi-character represented characters, such as tabs.
-    delimiter = str.encode(config.get('csv', 'delimiter'), 'utf-8').decode('unicode_escape')
+    delimiter = config.get('csv', 'delimiter')
+    delimiter = str.encode(delimiter, 'utf-8')
+    delimiter = delimiter.decode('unicode_escape')
+    id_field = config.get('main', 'id_field', fallback=False)
     
+
     with open(source_path, encoding='utf-8') as f:
         csvreader = csv.DictReader(f, fieldnames=fieldnames, delimiter=delimiter)
-        for row in csvreader:
-            yield {
+        for item in csvreader:
+            #item = preprocess_item(row, config)
+            
+            action = {
                 '_op_type': 'index',
                 '_index': _index,
                 '_type': _type,
-                '_source': row
             }
+            
+            if id_field:
+                id = item[id_field]
+                action['_id'] = id
+                item.pop('_id')
+
+            action['_source']=item
+            yield action
 
 
 def push2es_stream(config):
     es = recreate_index(config)
-    print(bulk(es, getcontent_csv(config)))
+    data = list(getcontent_csv(config))
+    report = bulk(es, data)
+    print(report)
     
     
 def push2es_parallel(config):
@@ -72,10 +87,8 @@ def csv2es(parallel=True):
         push2es_parallel(config)
     else:
         push2es_stream(config)
-        
-    
 
 if __name__ == '__main__':
-    #csv2es(parallel=True)
-    csv2es()
+    csv2es(parallel=False)
+    #csv2es()
 
