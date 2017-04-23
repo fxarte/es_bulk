@@ -18,7 +18,10 @@ class Simple_Elastic_Search_Class():
         type = settings.get('main','type')
         if 'data' in kwargs:
             data = kwargs['data']
-            return es.index(index=index, doc_type=type, id=data['id'], body=data)
+            # in this case we do not want to keep id as a field:
+            id = data['id']
+            del data['id']
+            return es.index(index=index, doc_type=type, id=id, body=data)
         else:
             return None
         
@@ -30,34 +33,59 @@ def get_target():
         
 class Analyze_size():
     KEY_NAME='size in bytes'
-    def get_key_name():
-        return Analyze_size.KEY_NAME
 
     def analyze_file(dir_entry):
-        return 0
+        return dir_entry.stat(follow_symlinks=False).st_size
         
     def analyze_folder(dir_entry, children_data):
-        total = 1
+        total=0
         for k, v in children_data.items():
             total += v[Analyze_size.KEY_NAME]
         return total
 
 
+class HashKeySHA1():
+    ''' File hash calculation '''
+    
+    KEY_NAME='a hash value'
+
+    def analyze_file(dir_entry):
+        '''
+        Use this shell as reference:
+        (stat --printf="blob %s\0" "$1"; cat "$1") | sha1sum -b | cut -d" " -f1
+        '''
+        s = hashlib.sha1()
+        filesize_bytes = dir_entry.stat(follow_symlinks=False).st_size
+        s.update(("blob %u\0" % filesize_bytes).encode('utf-8'))
+        with open(dir_entry.path, 'rb') as f:
+            s.update(f.read())
+        return s.hexdigest()
+
+    def analyze_folder(dir_entry, children_data):
+        total = ""
+        for k, v in children_data.items():
+            total +=" " + v[HashKeySHA1.KEY_NAME]
+        return total
+    
+    
+    
 def get_analyzers():
     ''' returns analyzers'''
     return [Analyze_size]
 
         
 def process_file(dir_entry):
-    file_data={"id":dir_entry.path}
+    hash = HashKeySHA1.analyze_file(dir_entry)
+    file_data={"id":"{}#{}".format(dir_entry.path, hash)}
+    file_data[HashKeySHA1.KEY_NAME] = hash
     for a in get_analyzers():
-        file_data[a.get_key_name()] = a.analyze_file(dir_entry)
+        file_data[a.KEY_NAME] = a.analyze_file(dir_entry)
     return file_data
 
 def post_visit_process_folder(dir_path, children_data=None):
     folder_data = {"id":dir_path}
     for a in get_analyzers():
-        folder_data[a.get_key_name()] = a.analyze_folder(dir_path, children_data)
+        folder_data[a.KEY_NAME] = a.analyze_folder(dir_path, children_data)
     return folder_data
 
 def visit_tree(path):
@@ -80,7 +108,6 @@ def visit_tree(path):
     # send folder data to target after pst visit processing
     get_target().push(data=folder_data)
     # We return folder_data for parent calculations
-    print("    done!")
     return folder_data
 
 
