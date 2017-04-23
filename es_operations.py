@@ -4,11 +4,16 @@
 
 '''
 
-import configparser
-import pprint
+#python
+from functools import lru_cache
+import sys
 
+#libraries
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk, streaming_bulk, parallel_bulk
+
+#
+import config as conf
 
 def interesting_lines(f):
     ''' taken from https://youtu.be/EnSu9hHGq5o?t=18m41s
@@ -22,14 +27,16 @@ def interesting_lines(f):
             continue
         yield line
 
-#@lru_cache(maxsize=8)
-def get_index(config, refresh=True):
-    '''Returns an ES index, either a cached or fresh one '''
-    host = config.get('main', 'host')
-    port = config.get('main', 'port')
+@lru_cache(maxsize=16)
+def get_index(config_path, refresh=False):
+    '''Returns an ES index, if it does not exists, or if refresh is True, it will be created.
+    Otherwise an instance poiunting to an existing one will be returned '''
+    settings = conf.get_config(config_path)
+    host = settings.get('main', 'host')
+    port = settings.get('main', 'port')
     
-    index = config.get('main', 'index')
-    index_settings_file = config.get('main', 'index_settings')
+    index = settings.get('main', 'index')
+    index_settings_file = settings.get('main', 'index_settings')
     
     es = Elasticsearch([{'host': host, 'port': port}])
     # delete index if exists
@@ -37,26 +44,23 @@ def get_index(config, refresh=True):
         es.indices.delete(index=index)
     # index settings
     settings={}
-    #index_settings_file=None
-    #print('------', index_settings_file)
     if index_settings_file:
         try:
             with open(index_settings_file) as source_file:
-                #print('File READ')
                 settings = ujson.load(source_file)
         except:
             print("Error while reading file: '{}'".format(index_settings_file), sys.exc_info()[0])
-            print("No index file found, using ES defaults")
+            print("No index setting file found, using ES defaults")
+            pass
     es.indices.create(index=index, body=settings)
     return es
 
-def push2es(config,data, parallel=False):
+def push2es(es, settings, data, parallel=False):
     ''' Pushes a list of dicts to the associated Elastic Search instance '''
-    es = get_index(config)
-    source_path = config.get('main', 'source_path')
-    _index = config.get('main', 'index')
-    _type = config.get('main', 'type')
-    parser = config.get('xml', 'parser')
+    #es = get_index(settings)
+    source_path = settings.get('main', 'source_path')
+    _index = settings.get('main', 'index')
+    _type = settings.get('main', 'type')
     #assumes data is a list of dictionaries
     #Generator version
     def genereate_actions(data):
@@ -81,7 +85,7 @@ def push2es(config,data, parallel=False):
         for success, info in parallel_bulk(es, genereate_actions(data), thread_count=4):
             if not success: print('Doc failed', info)
     else:
-        bulk(client=es, actions=get_actions(data))
+        bulk(client=es, actions=genereate_actions(data))
 
 
 if __name__ == '__main__':
