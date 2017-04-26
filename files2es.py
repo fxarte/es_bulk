@@ -12,6 +12,8 @@ import es_operations as eso
 import hashlib
 
 
+ANALYZERS=None
+
 class Simple_Elastic_Search_Class():
     def push(**kwargs):
         index = settings.get('main','index')
@@ -31,19 +33,6 @@ def get_target():
     return Simple_Elastic_Search_Class
         
         
-class Analyze_size():
-    KEY_NAME='size in bytes'
-
-    def analyze_file(dir_entry):
-        return dir_entry.stat(follow_symlinks=False).st_size
-        
-    def analyze_folder(dir_entry, children_data):
-        total=0
-        for k, v in children_data.items():
-            total += v[Analyze_size.KEY_NAME]
-        return total
-
-
 class HashKeySHA1():
     ''' File hash calculation '''
     
@@ -69,22 +58,17 @@ class HashKeySHA1():
     
     
     
-def get_analyzers():
-    ''' returns analyzers'''
-    return [Analyze_size]
-
-        
 def process_file(dir_entry):
     hash = HashKeySHA1.analyze_file(dir_entry)
     file_data={"id":"{}#{}".format(dir_entry.path, hash)}
     file_data[HashKeySHA1.KEY_NAME] = hash
-    for a in get_analyzers():
+    for a in ANALYZERS:
         file_data[a.KEY_NAME] = a.analyze_file(dir_entry)
     return file_data
 
 def post_visit_process_folder(dir_path, children_data=None):
     folder_data = {"id":dir_path}
-    for a in get_analyzers():
+    for a in ANALYZERS:
         folder_data[a.KEY_NAME] = a.analyze_folder(dir_path, children_data)
     return folder_data
 
@@ -111,6 +95,18 @@ def visit_tree(path):
     return folder_data
 
 
+def load_analyzers():
+    global ANALYZERS
+    if not ANALYZERS:
+        ANALYZERS=[]
+        analyzers_modules = __import__('analyzers')
+        for a in analyzers_modules.__all__:
+            ANALYZERS.append(getattr(analyzers_modules, a))
+
+
+
+
+
 if __name__ == '__main__':
     print(__doc__)
     parser = argparse.ArgumentParser(add_help=False)
@@ -125,6 +121,10 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
     config_path = args.path
+
+    load_analyzers()
+
+
     #config_path = 'files_config.ini'
     settings = conf.get_config(config_path)
     path = settings.get('main', 'source_path')
