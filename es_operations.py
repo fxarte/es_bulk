@@ -31,7 +31,7 @@ def interesting_lines(f):
 def get_index(config_path, refresh=False):
     '''Returns an ES index, if it does not exists, or if refresh is True, it will be created.
     Otherwise an instance poiunting to an existing one will be returned '''
-    settings = conf.get_config(config_path)
+    settings = conf.load(config_path)
     host = settings.get('main', 'host')
     port = settings.get('main', 'port')
     
